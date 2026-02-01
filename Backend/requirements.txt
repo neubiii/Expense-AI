@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+pydantic
+python-multipart
+pillow
+pytesseract
+opencv-python
+sqlalchemy
+openai
