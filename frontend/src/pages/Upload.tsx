@@ -2,8 +2,19 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { extractReceipt } from "../api/client";
 import { saveSession } from "./state";
+ import { useEffect } from "react";
 
-export default function Upload() {
+function clearExpenseSession() {
+  const keys = ["extract", "fields", "policy", "review_state", "edits", "justifications"];
+  keys.forEach((k) => sessionStorage.removeItem(k));
+}
+
+export default function Upload() { 
+
+useEffect(() => {
+  clearExpenseSession();
+}, []);
+
   const nav = useNavigate();
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);

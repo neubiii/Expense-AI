@@ -30,3 +30,18 @@ export type PolicyResponse = {
 };
 
 export type ReviewState = "GREEN" | "YELLOW" | "RED";
+
+// --- Audit trail (for thesis transparency) ---
+export type EditRecord = {
+  field: string;
+  from: any;
+  to: any;
+  at: string; // ISO datetime
+};
+
+export type JustificationRecord = {
+  rule_id: string;
+  field: string;
+  text: string;
+  at: string; // ISO datetime
+};

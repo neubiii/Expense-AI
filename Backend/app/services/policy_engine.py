@@ -47,18 +47,33 @@ def validate_policy(receipt_id: str, fields: Dict[str, Any], user_context: Dict[
         if conf < CONF_THRESHOLD:
             issues.append(issue(f, "WARN", "POL-CONF-100", f"{f} confidence below threshold ({conf:.2f})."))
 
-    # 3) Example: meals limit (toy policy)
-    # Note: keep this deterministic. LLM is NOT used here.
+    # 3) Example: meals limit (toy policy) — deterministic
     if fields.get("category", {}).get("value", "").lower() in {"meals", "meal", "food"}:
         try:
             total_val = str(fields.get("total", {}).get("value", "0")).replace(",", ".")
             total = float(total_val)
+
             if total > 20:
-                issues.append(
-                    issue("total", "FAIL", "POL-LIM-010", "Meals exceed 20 EUR without justification/attendees.")
-                )
+                # ✅ Deterministic justification handling (exception evidence)
+                just_map = (user_context or {}).get("justifications") or {}
+                justification_text = (just_map.get("POL-LIM-010") or "").strip()
+
+                if justification_text:
+                    # downgrade FAIL → WARN (still evidence, but allowed-with-justification)
+                    issues.append(
+                        issue(
+                            "total",
+                            "WARN",
+                            "POL-LIM-010",
+                            "Meals exceed 20 EUR but a justification was provided (requires reviewer attention).",
+                        )
+                    )
+                else:
+                    issues.append(
+                        issue("total", "FAIL", "POL-LIM-010", "Meals exceed 20 EUR without justification/attendees.")
+                    )
+
         except Exception:
-            # Use the rule id that exists in your RULE_SUMMARIES (we defined POL-PARSE-101 earlier)
             issues.append(issue("total", "WARN", "POL-PARSE-101", "Could not parse total amount reliably."))
 
     # 4) Compliance aggregation

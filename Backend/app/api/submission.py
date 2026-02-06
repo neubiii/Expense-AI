@@ -8,6 +8,7 @@ from app.db.models import SubmissionRecord, AuditEvent
 
 router = APIRouter()
 
+
 class SubmissionRequest(BaseModel):
     receipt_id: str
     final_fields: Dict[str, Any]
@@ -16,6 +17,8 @@ class SubmissionRequest(BaseModel):
     issues: List[Dict[str, Any]] = Field(default_factory=list)
     review_state: str  # GREEN / YELLOW / RED
     edits: List[Dict[str, Any]] = Field(default_factory=list)
+    justifications: List[Dict[str, Any]] = Field(default_factory=list)
+
 
 @router.post("/submission/create")
 def create_submission(req: SubmissionRequest):
@@ -40,10 +43,11 @@ def create_submission(req: SubmissionRequest):
             payload={
                 "issues": req.issues,
                 "edits": req.edits,
+                "justifications": req.justifications,
                 "policy_rule_ids": req.policy_rule_ids,
-                "review_state": req.review_state
+                "review_state": req.review_state,
             },
-            created_at=datetime.utcnow().isoformat()
+            created_at=datetime.utcnow().isoformat(),
         )
         session.add(audit)
 
