@@ -34,12 +34,17 @@ const CATEGORY_KEYWORDS: Record<string, string[]> = {
     "starbucks",
     "friscos",
     "del friscos",
+    "lunch",
+    "dinner",
+    "breakfast",
   ],
-  Lodging: ["hotel", "inn", "motel", "hilton", "marriott", "booking", "airbnb"],
-  Travel: ["airline", "flight", "boarding", "train", "bahn", "db", "ticket"],
-  "Local Transport": ["uber", "lyft", "taxi", "metro", "bus", "parking", "toll"],
-  "Office Supplies": ["office", "stationery", "staples", "paper", "pen", "printer"],
+  Lodging: ["hotel", "inn", "motel", "hilton", "marriott", "booking", "airbnb", "stay"],
+  Travel: ["airline", "flight", "boarding", "train", "bahn", "db", "ticket", "airport"],
+  "Local Transport": ["uber", "lyft", "taxi", "metro", "bus", "parking", "toll", "tram"],
+  "Office Supplies": ["office", "stationery", "staples", "paper", "pen", "printer", "supplies"],
   "Software / Subscriptions": ["subscription", "license", "software", "cloud", "saas", "github"],
+  "Client Entertainment": ["client", "customer", "prospect", "entertainment"],
+  "Training / Education": ["training", "workshop", "seminar", "conference", "course", "education"],
 };
 
 const FIELD_ORDER = [
@@ -65,10 +70,16 @@ function normalize(s: string) {
   return (s || "").toLowerCase().replace(/\s+/g, " ").trim();
 }
 
-function suggestCategory(extracted: ExtractResponse) {
+/**
+ * Deterministic category suggestion.
+ * We use: merchant + OCR preview + optional user note (voice/text).
+ */
+function suggestCategory(extracted: ExtractResponse, receiptNote: string) {
   const merchant = normalize(String(extracted.fields?.merchant?.value || ""));
   const raw = normalize(String(extracted.raw_text_preview || ""));
-  const text = `${merchant}\n${raw}`;
+  const note = normalize(String(receiptNote || ""));
+
+  const text = `${merchant}\n${raw}\n${note}`;
 
   let best = { value: "Other", confidence: 0.25 };
 
@@ -76,28 +87,48 @@ function suggestCategory(extracted: ExtractResponse) {
     let hits = 0;
     for (const kw of kws) if (text.includes(kw)) hits++;
     if (hits > 0) {
-      const conf = Math.min(0.85, 0.35 + hits * 0.15);
+      const conf = Math.min(0.9, 0.35 + hits * 0.12); // bounded deterministic score
       if (conf > best.confidence) best = { value: cat, confidence: conf };
     }
   }
   return best;
 }
 
-function withDefaults(extracted: ExtractResponse) {
+/**
+ * Prefill fields using deterministic logic:
+ * - category suggestion if empty / Other / Uncategorized
+ * - description + business purpose from receipt note if empty
+ */
+function withDefaults(extracted: ExtractResponse, receiptNote: string) {
   const base = extracted.fields;
+
   const catVal = String(base.category?.value || "");
   const needsSuggestion =
     !catVal || normalize(catVal) === "uncategorized" || normalize(catVal) === "other";
 
-  const suggestion = suggestCategory(extracted);
+  const suggestion = suggestCategory(extracted, receiptNote);
+
+  // Description + business purpose: prefill only if empty
+  const note = (receiptNote || "").trim();
+  const firstLine = note ? note.split("\n").map((x) => x.trim()).filter(Boolean)[0] : "";
+
+  const existingDesc = String(base.description?.value || "").trim();
+  const existingBP = String(base.business_purpose?.value || "").trim();
+
+  const descPrefill = existingDesc || (firstLine ? firstLine.slice(0, 140) : "");
+  const bpPrefill =
+    existingBP ||
+    (note
+      ? "Business expense (note provided)"
+      : "");
 
   return {
     ...base,
     category: needsSuggestion
       ? { value: suggestion.value, confidence: suggestion.confidence }
       : base.category,
-    description: base.description ?? { value: "", confidence: 1.0 },
-    business_purpose: base.business_purpose ?? { value: "", confidence: 1.0 },
+    description: base.description ?? { value: descPrefill, confidence: 1.0 },
+    business_purpose: base.business_purpose ?? { value: bpPrefill, confidence: 1.0 },
     payment_type: base.payment_type ?? { value: "Corporate Card", confidence: 1.0 },
     reimbursable: base.reimbursable ?? { value: true, confidence: 1.0 },
   };
@@ -148,19 +179,26 @@ export default function Review() {
   const nav = useNavigate();
   const extracted = loadSession<ExtractResponse>("extract");
 
-  const [fields, setFields] = useState<any>(extracted ? withDefaults(extracted) : null);
+  // ✅ New: receipt note from Upload step (text/voice transcript)
+  const receiptNote = (loadSession<string>("receipt_note") || "").trim();
+
+  const [fields, setFields] = useState<any>(
+    extracted ? withDefaults(extracted, receiptNote) : null
+  );
   const [policy, setPolicy] = useState<PolicyResponse | null>(null);
   const [loadingPolicy, setLoadingPolicy] = useState(false);
   const [err, setErr] = useState("");
 
   // Audit trail (persisted)
-  const [edits, setEdits] = useState<EditRecord[]>(() => loadSession<EditRecord[]>("edits") || []);
+  const [edits, setEdits] = useState<EditRecord[]>(
+    () => loadSession<EditRecord[]>("edits") || []
+  );
   const [justifications, setJustifications] = useState<JustificationRecord[]>(
     () => loadSession<JustificationRecord[]>("justifications") || []
   );
 
   // Keep original values to compute “edited”
-  const originalRef = useRef<any>(extracted ? withDefaults(extracted) : null);
+  const originalRef = useRef<any>(extracted ? withDefaults(extracted, receiptNote) : null);
 
   // Explain panel
   const [ask, setAsk] = useState("What should I do next?");
@@ -413,6 +451,20 @@ export default function Review() {
             {err && <div style={{ marginTop: 12, color: "#ffb3b3" }}>{err}</div>}
           </div>
 
+          {/* ✅ New: Receipt note card (voice/text)
+          {receiptNote && (
+            <div className="card">
+              <div style={{ fontWeight: 900, fontSize: 16 }}>Receipt note (optional)</div>
+              <div className="small">
+                This note was provided by the user (typed or voice transcript). It is used only to prefill fields and add context.
+              </div>
+              <div className="hr" />
+              <pre style={{ whiteSpace: "pre-wrap", margin: 0, color: "rgba(255,255,255,0.80)" }}>
+                {receiptNote}
+              </pre>
+            </div>
+          )} */}
+
           {/* Issues */}
           {policy && policy.issues?.length > 0 && (
             <div className="card">
@@ -465,7 +517,7 @@ export default function Review() {
               <div>
                 <div style={{ fontWeight: 900, fontSize: 16 }}>Expense form</div>
                 <div className="small">
-                  Confidence is an OCR signal. “Edited/Justified” are human verification signals (audit trail).
+                  Confidence is an OCR signal. “Edited/Justified” are human verification signals.
                 </div>
               </div>
               <span className="badge blue">

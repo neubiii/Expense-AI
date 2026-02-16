@@ -31,22 +31,7 @@ export default function TopNav() {
         <div className="container" style={{ paddingTop: 14, paddingBottom: 14 }}>
           <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
             <div className="row" style={{ gap: 12 }}>
-              <div
-                style={{
-                  width: 34,
-                  height: 34,
-                  borderRadius: 10,
-                  background: "rgba(10,110,209,0.18)",
-                  border: "1px solid rgba(10,110,209,0.40)",
-                  display: "grid",
-                  placeItems: "center",
-                  fontWeight: 900,
-                  color: "rgba(255,255,255,0.92)",
-                }}
-                title="Expense AI (HITL)"
-              >
-                AI
-              </div>
+              
               <div>
                 <div style={{ fontWeight: 900, letterSpacing: 0.2 }}>
                   Expense AI — Human-in-the-Loop

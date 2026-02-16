@@ -391,7 +391,7 @@ export default function Summary() {
           <div className="card">
             <div style={{ fontWeight: 950, fontSize: 16 }}>Confirm submission</div>
             <div className="small">
-              You stay in control — submission happens only after you confirm.
+              Submission happens only after you confirm.
             </div>
 
             <div className="hr" />
